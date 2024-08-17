@@ -8,6 +8,9 @@
 For a number, userCount is a better name than numUsers or usersInt.
 
 とあったので、`distinctSimplifiedEmailsNum`としようとしたところを`distinctSimplifiedEmails`とした
+- 時間計算量：O(nm) （n: len(emails), m: len(emails[i]）
+  - 見積もり実行時間：100 * 100 / 10^8 = 10^-4 = 0.1ms
+- 空間計算量：O(nm)
 
 ```Go
 // Go
@@ -50,3 +53,46 @@ func simplifyEmailAddress(email string) string {
 }
 ```
 
+### Step 2
+- step1のコードの修正
+- `simplifiedEmail` -> `simplified` （関数名simplifyEmailAddressから`var simplified string`だけで役割が推測できるから）
+- 単純化されたメアドの集合を作るループと`uniqueEmails`を数えるループを合体
+
+```Go
+func numUniqueEmails(emails []string) int {
+	simplifiedEmails := make(map[string]struct{})
+
+	for _, email := range emails {
+		email := simplifyEmailAddress(email)
+		simplifiedEmails[email] = struct{}{}
+	}
+
+	return len(simplifiedEmails)
+}
+
+func simplifyEmailAddress(email string) string {
+	var simplified string
+	localOrDomain := "local"
+	afterPlusMark := false
+
+	for _, c := range email {
+		if c == '@' {
+			localOrDomain = "domain"
+		}
+		if localOrDomain == "local" && afterPlusMark {
+			continue
+		}
+		if localOrDomain == "local" && c == '.' {
+			continue
+		}
+		if localOrDomain == "local" && c == '+' {
+			afterPlusMark = true
+			continue
+		}
+
+		simplified += string(c)
+	}
+
+	return simplified
+}
+```
