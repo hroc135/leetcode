@@ -8,9 +8,10 @@
 For a number, userCount is a better name than numUsers or usersInt.
 
 とあったので、`distinctSimplifiedEmailsNum`としようとしたところを`distinctSimplifiedEmails`とした
-- 時間計算量：O(nm) （n: len(emails), m: len(emails[i]）
+- 時間計算量：O(n) （n: len(emails)）
+  - メアドの長さをmとしてO(nm)としたいところだが、[RFC 5321](https://www.rfc-editor.org/rfc/rfc5321#section-4.5.3)によると、メアドの長さは高々320字で無視できる大きさなのでO(n)
   - 見積もり実行時間：100 * 100 / 10^8 = 10^-4 = 0.1ms
-- 空間計算量：O(nm)
+- 空間計算量：O(n)
 
 ```Go
 // Go
@@ -159,7 +160,7 @@ func simplifyEmailAddress(email string) (string, error) {
 ```
 
 - 標準ライブラリのstringsを使って解く
-- 時間計算量はstep1の解法と同じO(nm)のはずなのにこちらの方がleetcodeの計測時間が1/3くらいになるのは標準ライブラリの最適化のおかげ？
+- 時間計算量はstep1の解法と同じO(n)のはずなのにこちらの方がleetcodeの計測時間が1/3くらいになるのは標準ライブラリの最適化のおかげ？
 
 ```Go
 func numUniqueEmails(emails []string) int {
@@ -183,25 +184,49 @@ func numUniqueEmails(emails []string) int {
 }
 ```
 
+- https://github.com/TORUS0818/leetcode/pull/16/files を参考に、正規表現を使う方法も試してみることに
+- https://help.xmatters.com/ondemand/trial/valid_email_format.htm 有効なメアドの条件について
+  - local: アルファベットと数字以外に、'_', '.', '/'が使える
+  - domain: アルファベット、数字、'.', '/'が使える。最後の'.'以下は、2字以上でないといけない
+
+```Go
+func numUniqueEmails(emails []string) int {
+	emailRegexp := regexp.MustCompile(`([^+]+)(?:\+.*)?@(.+)`)
+
+	uniqueAddresses := make(map[string]struct{})
+
+	for _, email := range emails {
+		localAndDomain := emailRegexp.FindStringSubmatch(email)
+		localName := strings.ReplaceAll(localAndDomain[1], ".", "")
+		domainName := localAndDomain[2]
+		normalized := localName + "@" + domainName
+
+		uniqueAddresses[normalized] = struct{}{}
+	}
+
+	return len(uniqueAddresses)
+}
+```
+
 ### Step 3
 ```Go
 func numUniqueEmails(emails []string) int {
-	addresses := make(map[string]struct{})
+	uniqueAddresses := make(map[string]struct{})
 
 	for _, email := range emails {
 		localAndDomain := strings.Split(email, "@")
+		if len(localAndDomain) != 2 {
+			return -1 // 本当は関数の返り値をint, errorにしてerrorを返したいところ
+		}
 		localName, domainName := localAndDomain[0], localAndDomain[1]
 
-		indexOfPlus := strings.Index(localName, "+")
-		if indexOfPlus != -1 {
-			localName = localName[:indexOfPlus]
-		}
+		localName = strings.Split(localName, "+")[0]
 		localName = strings.ReplaceAll(localName, ".", "")
 
-		actualAddress := localName + "@" + domainName
-		addresses[actualAddress] = struct{}{}
+		normalized := localName + "@" + domainName
+		uniqueAddresses[normalized] = struct{}{}
 	}
 
-	return len(addresses)
+	return len(uniqueAddresses)
 }
 ```
