@@ -1,3 +1,5 @@
+以下のコードはGoで書かれており、すべてデフォルトのフォーマッターであるgofmtにかけてあります。
+
 ### Step 1
 - '1'をグラフ探索の要領で調べていけば良い
 - DFSの方がBFSより速いと聞いたことがあるのでDFSを使うことに。（後で真偽を確かめよう）
@@ -62,7 +64,7 @@ func landDfs(x, y int, grid [][]byte, visitedLandIdx map[[2]int]struct{}) map[[2
 
 ### Step 2
 
-#### 2a
+#### 2a (スタックを使ったDFS)
 - 他の方のプルリクで再帰の深さについての指摘があった
   - Goは再帰回数の上限が定められておらず、環境依存だが、最大9e4回再帰するということを考えると賢明な選択ではないだろう
   - DFSはスタックでも実装でき、こちらならスタックオーバーフローを防ぐことができる
@@ -139,7 +141,7 @@ func markIslandVisited(srcRow, srcColumn, rowSize, columnSize int, grid [][]byte
 }
 ```
 
-#### 2b
+#### 2b (BFS)
 - BFSでも解いてみる
 - 「これでいけるはず！」というコードを提出してMemory Limit Exceededとなってしまった
   - 走査済みかどうかを入力値gridを書き換えていくことで新しく2次元配列を用意する必要をなくしたが、変わらずMemory Limit Exceeded
@@ -212,6 +214,107 @@ func markIslandVisited(srcRow, srcColumn, rowSize, columnSize int, grid [][]byte
 	}
 
 	return grid
+}
+```
+
+#### 2c (union-find)
+- 他の方の回答でunion-findを使った方法を散見したので試してみることに
+- 聞き慣れないアルゴリズムなのでまずは以下の記事を参考に中身を理解する
+  - https://en.wikipedia.org/wiki/Disjoint-set_data_structure
+  - https://qiita.com/saka_pon/items/2f18c84f1b6834e4fe4a
+- https://github.com/seal-azarashi/leetcode/pull/17/files で、unionfindクラスのメンバであるparentsとranksを一次元配列とし、連続したメモリ領域を使用できるよう工夫していたので真似することに
+- つまずいたところは、unionメソッドの最後にuf.countをデクリメントしていたつもりが、コードを走らせてもuf.countの初期値が返ってきて、デクリメントされていなかった
+  - 原因は、レシーバーをunionfindの値にしていたことで、unionfindのポインタでないと、unionfindの中のint型の値を上書きすることができない
+- union-findはエンジニアの常識に含まれていないと思ったので、丁寧にコメントを残すことにする
+
+```Go
+const (
+	water = '0'
+	land  = '1'
+)
+
+func numIslands(grid [][]byte) int {
+	if len(grid) == 0 {
+		log.Fatal("length of grid is 0")
+	}
+	rowSize, columnSize := len(grid), len(grid[0])
+
+	uf := initUnionFind(grid)
+
+	for r := 0; r < rowSize; r++ {
+		for c := 0; c < columnSize; c++ {
+			if grid[r][c] != land {
+				continue
+			}
+			if r+1 < rowSize && grid[r+1][c] == land {
+				uf.union(twoDimensionToOneDimension(r, c, columnSize), twoDimensionToOneDimension(r+1, c, columnSize))
+			}
+			if c+1 < columnSize && grid[r][c+1] == land {
+				uf.union(twoDimensionToOneDimension(r, c, columnSize), twoDimensionToOneDimension(r, c+1, columnSize))
+			}
+		}
+	}
+
+	return uf.count
+}
+
+func twoDimensionToOneDimension(r, c, columnSize int) int {
+	return r*columnSize + c
+}
+
+type unionfind struct {
+	parents []int
+	ranks   []int // rank of the root is 0
+	count   int
+}
+
+func initUnionFind(grid [][]byte) unionfind {
+	rowSize, columnSize := len(grid), len(grid[0])
+	parents := make([]int, rowSize*columnSize)
+	ranks := make([]int, rowSize*columnSize)
+	count := 0
+
+	for r := 0; r < rowSize; r++ {
+		for c := 0; c < columnSize; c++ {
+			if grid[r][c] == water {
+				continue
+			}
+			idx := twoDimensionToOneDimension(r, c, columnSize)
+			parents[idx] = idx
+			count++
+		}
+	}
+
+	return unionfind{parents: parents, ranks: ranks, count: count}
+}
+
+func (uf *unionfind) union(i, j int) {
+	iRoot, jRoot := uf.find(i), uf.find(j)
+	if iRoot == jRoot {
+		return
+	}
+
+	switch {
+	case uf.ranks[iRoot] < uf.ranks[jRoot]:
+		uf.parents[iRoot] = jRoot
+
+	case uf.ranks[iRoot] > uf.ranks[jRoot]:
+		uf.parents[jRoot] = iRoot
+
+	case uf.ranks[iRoot] == uf.ranks[jRoot]:
+		uf.parents[jRoot] = iRoot
+		uf.ranks[iRoot]++
+	}
+
+	uf.count--
+}
+
+// find returns the index of the root of the given index
+func (uf unionfind) find(i int) int {
+	for i != uf.parents[i] {
+		i = uf.parents[i]
+	}
+	return i
 }
 ```
 
