@@ -65,11 +65,11 @@ func landDfs(x, y int, grid [][]byte, visitedLandIdx map[[2]int]struct{}) map[[2
 #### 2a
 - 他の方のプルリクで再帰の深さについての指摘があった
   - Goは再帰回数の上限が定められておらず、環境依存だが、最大9e4回再帰するということを考えると賢明な選択ではないだろう
-  - DFSはスタックでも実装でき、こちらならメモリの過剰使用とスタックオーバーフローを防ぐことができる
-- '0', '1'をそれぞれ定数ocean, landとして定義することによってマジックナンバーに見えることを防ぐ
+  - DFSはスタックでも実装でき、こちらならスタックオーバーフローを防ぐことができる
+- '0', '1'をそれぞれ定数water, landとして定義することによってマジックナンバーに見えないようにする
 - DFS関数内の近傍インデックスを探索する部分を関数化
-  - nested関数として定義したので、親関数の引数も内部で使うことができ、引数を2つだけにすることができた
-  - nested関数でなければ、`func isUnvisitedLandInGrid(r, c, rowSize, columnSize int, grid [][]byte, isVisitedLand [][]bool) bool`となってしまう
+  - nested関数として定義したので、親関数の引数も内部で使うことができ、引数を2つだけにすることができた。この方が個人的に見やすい
+  - nested関数でなければ、`func traverseNeighbors(r, c, rowSize, columnSize int, grid [][]byte, isVisitedLand [][]bool) bool`となってしまう
 - 入力条件で len(grid) > 0 が保証されてはいるが、スライスの長さを確かめずにgrid[0]を参照することに抵抗を感じたので先に長さを調べることに
 
 ```Go
@@ -80,6 +80,9 @@ const (
 )
 
 func numIslands(grid [][]byte) int {
+	if len(grid) == 0 {
+        	log.Fatal("length of grid is 0")
+    	}
 	rowSize, columnSize := len(grid), len(grid[0])
 	islands := 0
 
@@ -89,7 +92,7 @@ func numIslands(grid [][]byte) int {
 				continue
 			}
 
-			grid = landDfs(r, c, rowSize, columnSize, grid)
+			grid = markIslandVisited(r, c, rowSize, columnSize, grid)
 			islands++
 		}
 	}
@@ -97,31 +100,39 @@ func numIslands(grid [][]byte) int {
 	return islands
 }
 
-func landDfs(srcRow, srcColumn, rowSize, columnSize int, grid [][]byte) [][]byte {
+// markIslandVisited uses DFS to traverse unvisited island
+func markIslandVisited(srcRow, srcColumn, rowSize, columnSize int, grid [][]byte) [][]byte {
 	idxStack := [][2]int{{srcRow, srcColumn}}
 	grid[srcRow][srcColumn] = visitedLand
 
-	traverseUnvisitedLand := func(r, c int) {
-		if !(0 <= r && r < rowSize && 0 <= c && c < columnSize) {
-			return
+	traverseNeighbors := func(r, c int) {
+		neighborIdxs := [4][2]int{
+			{r + 1, c},
+			{r - 1, c},
+			{r, c + 1},
+			{r, c - 1},
 		}
-		if grid[r][c] != unvisitedLand {
-			return
-		}
+		for _, idxs := range neighborIdxs {
+			nr, nc := idxs[0], idxs[1]
+			if !(0 <= nr && nr < rowSize && 0 <= nc && nc < columnSize) {
+				continue
+			}
+			if grid[nr][nc] != unvisitedLand {
+				continue
+			}
 
-		idxStack = append(idxStack, [2]int{r, c})
-		grid[r][c] = visitedLand
+			idxStack = append(idxStack, [2]int{nr, nc})
+			grid[nr][nc] = visitedLand
+		}
 	}
 
 	for len(idxStack) > 0 {
+		// pop from idxStack
 		peek := idxStack[len(idxStack)-1]
 		peekRow, peekCol := peek[0], peek[1]
 		idxStack = idxStack[:len(idxStack)-1]
 
-		traverseUnvisitedLand(peekRow+1, peekCol)
-		traverseUnvisitedLand(peekRow-1, peekCol)
-		traverseUnvisitedLand(peekRow, peekCol+1)
-		traverseUnvisitedLand(peekRow, peekCol-1)
+		traverseNeighbors(peekRow, peekCol)
 	}
 
 	return grid
@@ -134,7 +145,7 @@ func landDfs(srcRow, srcColumn, rowSize, columnSize int, grid [][]byte) [][]byte
   - 走査済みかどうかを入力値gridを書き換えていくことで新しく2次元配列を用意する必要をなくしたが、変わらずMemory Limit Exceeded
   - 原因を時間をかけて探すがなかなか見つからない
   - ついに諦めてChatGPTに聞いてみる
-  - 原因は、visitedLandの印を付けるタイミングがキューから取り出した時になっており、同じインデックスが重複してキューに追加されてしまっていたこと
+  - 原因は、セルをvisitedLandに変えるタイミングがキューから取り出した時になっており、同じインデックスが重複してキューに追加されてしまっていたこと
   - キューに加える時にvisitedLandの印を付けるように変更したらAC
   - DFSの方の回答にも当てはまるので2aも修正する（上記コードは修正後のもの）
 
@@ -146,6 +157,9 @@ const (
 )
 
 func numIslands(grid [][]byte) int {
+	if len(grid) == 0 {
+        	log.Fatal("length of grid is 0")
+    	}
 	rowSize, columnSize := len(grid), len(grid[0])
 	islands := 0
 
@@ -155,7 +169,7 @@ func numIslands(grid [][]byte) int {
 				continue
 			}
 
-			grid = landBfs(r, c, rowSize, columnSize, grid)
+			grid = markIslandVisited(r, c, rowSize, columnSize, grid)
 			islands++
 		}
 	}
@@ -163,37 +177,41 @@ func numIslands(grid [][]byte) int {
 	return islands
 }
 
-func landBfs(srcRow, srcColumn, rowSize, columnSize int, grid [][]byte) [][]byte {
+// markIslandVisited uses BFS to traverse unvisited island
+func markIslandVisited(srcRow, srcColumn, rowSize, columnSize int, grid [][]byte) [][]byte {
 	idxQueue := [][2]int{{srcRow, srcColumn}}
 	grid[srcRow][srcColumn] = visitedLand
 
-	traverseUnvisitedLand := func(r, c int) {
-		if !(0 <= r && r < rowSize && 0 <= c && c < columnSize) {
-			return
+	traverseNeighbors := func(r, c int) {
+		neighborIdxs := [4][2]int{
+			{r + 1, c},
+			{r - 1, c},
+			{r, c + 1},
+			{r, c - 1},
 		}
-		if grid[r][c] != unvisitedLand {
-			return
-		}
+		for _, idxs := range neighborIdxs {
+			nr, nc := idxs[0], idxs[1]
+			if !(0 <= nr && nr < rowSize && 0 <= nc && nc < columnSize) {
+				continue
+			}
+			if grid[nr][nc] != unvisitedLand {
+				continue
+			}
 
-		idxQueue = append(idxQueue, [2]int{r, c})
-		grid[r][c] = visitedLand
+			idxQueue = append(idxQueue, [2]int{nr, nc})
+			grid[nr][nc] = visitedLand
+		}
 	}
 
 	for len(idxQueue) > 0 {
 		head := idxQueue[0]
 		headRow, headCol := head[0], head[1]
-		if len(idxQueue) == 1 {
-			idxQueue = [][2]int{}
-		} else {
-			idxQueue = idxQueue[1:]
-		}
+		idxQueue = idxQueue[1:]
 
-		traverseUnvisitedLand(headRow+1, headCol)
-		traverseUnvisitedLand(headRow-1, headCol)
-		traverseUnvisitedLand(headRow, headCol+1)
-		traverseUnvisitedLand(headRow, headCol-1)
+		traverseNeighbors(headRow, headCol)
 	}
 
 	return grid
 }
 ```
+
