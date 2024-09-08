@@ -2,7 +2,7 @@
 
 ### Step 1
 - '1'をグラフ探索の要領で調べていけば良い
-- DFSの方がBFSより速いと聞いたことがあるのでDFSを使うことに。（後で真偽を確かめよう）
+- DFSの方がBFSより速いと聞いたことがあるのでDFSを使うことに。（DFSとBFSのパフォーマンスの違いについてはstep3に記載）
 - DFSは再帰で実装（スタックでもできる）
 - 10分ほどでコードを書き上げて提出したが、以下のテストケースに引っかかった
 ```
@@ -222,10 +222,22 @@ func markIslandVisited(srcRow, srcColumn, rowSize, columnSize int, grid [][]byte
 - 聞き慣れないアルゴリズムなのでまずは以下の記事を参考に中身を理解する
   - https://en.wikipedia.org/wiki/Disjoint-set_data_structure
   - https://qiita.com/saka_pon/items/2f18c84f1b6834e4fe4a
+- union-find森を言葉で説明してみる
+  - union-find森の目的は、集合をあるルールに則ってグループ分けすること
+  - それを森を舞台に行う
+  - 基本操作（メソッド）は、union（木と木をくっつけて新しい木を構成する）とfind（任意のノードの根を探す）
 - https://github.com/seal-azarashi/leetcode/pull/17/files で、unionfindクラスのメンバであるparentsとranksを一次元配列とし、連続したメモリ領域を使用できるよう工夫していたので真似することに
 - つまずいたところは、unionメソッドの最後にuf.countをデクリメントしていたつもりが、コードを走らせてもuf.countの初期値が返ってきて、デクリメントされていなかった
   - 原因は、レシーバーをunionfindの値にしていたことで、unionfindのポインタでないと、unionfindの中のint型の値を上書きすることができない
-- union-findはエンジニアの常識に含まれていないと思ったので、丁寧にコメントを残すことにする
+- 最適化手法
+  - union by rank: unionの際に、rank（木の高さのようなもの）の大きい木を根とすることでrankを抑える手法。rankとは、木の高さが小さくなることがない限りは木の高さと等しい
+  - 経路圧縮: find(i)によってiを含む木の根がわかったら、iを根の直下に繋ぎかえる。キャッシュのような役割が期待される。しかし、この操作によって、rankと木の高さが一致しなくなる恐れがある
+  - 参考: https://qiita.com/saka_pon/items/2f18c84f1b6834e4fe4a
+- 時間計算量：O(mn logmn) （経路圧縮により、findはlogmn時間になるため）
+- 空間計算量：O(mn)
+- union-findはエンジニアの常識に含まれていないと思ったので、丁寧にコメントを残すことにした
+  - コメントが補助的な役割を果たせているかどうか自信がないので、アドバイスいただけると嬉しいです
+  - 英語でコメントを書いてみたので、わかりにくい表現になっている気がします
 
 ```Go
 const (
@@ -239,18 +251,19 @@ func numIslands(grid [][]byte) int {
 	}
 	rowSize, columnSize := len(grid), len(grid[0])
 
-	uf := initUnionFind(grid)
+	uf := initUnionfindForestFromGrid(grid, rowSize, columnSize)
 
 	for r := 0; r < rowSize; r++ {
 		for c := 0; c < columnSize; c++ {
-			if grid[r][c] != land {
+			if grid[r][c] == water {
 				continue
 			}
+			idx := twoDimensionToOneDimension(r, c, columnSize)
 			if r+1 < rowSize && grid[r+1][c] == land {
-				uf.union(twoDimensionToOneDimension(r, c, columnSize), twoDimensionToOneDimension(r+1, c, columnSize))
+				uf.union(idx, twoDimensionToOneDimension(r+1, c, columnSize))
 			}
 			if c+1 < columnSize && grid[r][c+1] == land {
-				uf.union(twoDimensionToOneDimension(r, c, columnSize), twoDimensionToOneDimension(r, c+1, columnSize))
+				uf.union(idx, twoDimensionToOneDimension(r, c+1, columnSize))
 			}
 		}
 	}
@@ -262,14 +275,29 @@ func twoDimensionToOneDimension(r, c, columnSize int) int {
 	return r*columnSize + c
 }
 
-type unionfind struct {
+// A unionfindForest represents a union-find data structure with an one-dimensional slice.
+type unionfindForest struct {
+	// parents is a slice of indices of parent index.
+	// parents[i] denotes the index of the parent of i.
+	// When parents[i] == i, i is the root of the tree.
 	parents []int
-	ranks   []int // rank of the root is 0
-	count   int
+
+	// ranks is a slice of the rank of the tree.
+	// When i is an index of the root of a tree, ranks[i] is the rank of that tree.
+	// When i isn't an index of a root of any trees, ranks[i] doesn't mean anything and it's not proper to use its value.
+	// When a tree only consists of its root, its rank is 0.
+	// Rank gets incremented only when two trees with same rank get united.
+	ranks []int
+
+	// count is the number of trees in the unionfind.
+	count int
 }
 
-func initUnionFind(grid [][]byte) unionfind {
-	rowSize, columnSize := len(grid), len(grid[0])
+// initUnionfindForestFromGrid initializes union-find data structure.
+// The initial value of unionfindForest.parents[i] is i.
+// The initial value of unionfindForest.ranks[i] is 0.
+// The initial value of unionfindForest.count is the number of lands in the grid.
+func initUnionfindForestFromGrid(grid [][]byte, rowSize, columnSize int) unionfindForest {
 	parents := make([]int, rowSize*columnSize)
 	ranks := make([]int, rowSize*columnSize)
 	count := 0
@@ -285,22 +313,25 @@ func initUnionFind(grid [][]byte) unionfind {
 		}
 	}
 
-	return unionfind{parents: parents, ranks: ranks, count: count}
+	return unionfindForest{parents: parents, ranks: ranks, count: count}
 }
 
-func (uf *unionfind) union(i, j int) {
+// uf.union unites two trees which i and j belongs to.
+func (uf *unionfindForest) union(i, j int) {
 	iRoot, jRoot := uf.find(i), uf.find(j)
-	if iRoot == jRoot {
+	if iRoot == jRoot { // no need to unite any trees when i and j belongs to the same tree
 		return
 	}
 
 	switch {
+	// The root with larger rank becomes the root of the new united tree.
 	case uf.ranks[iRoot] < uf.ranks[jRoot]:
 		uf.parents[iRoot] = jRoot
 
 	case uf.ranks[iRoot] > uf.ranks[jRoot]:
 		uf.parents[jRoot] = iRoot
 
+	// When the ranks of both trees are equal, the rank of the united tree will be incremented.
 	case uf.ranks[iRoot] == uf.ranks[jRoot]:
 		uf.parents[jRoot] = iRoot
 		uf.ranks[iRoot]++
@@ -309,12 +340,90 @@ func (uf *unionfind) union(i, j int) {
 	uf.count--
 }
 
-// find returns the index of the root of the given index
-func (uf unionfind) find(i int) int {
-	for i != uf.parents[i] {
-		i = uf.parents[i]
+// uf.find returns the index of the root of the given index
+func (uf unionfindForest) find(i int) int {
+	j := i
+
+	// This loop is ensured to terminate because there is always a root of any trees.
+	for j != uf.parents[j] {
+		j = uf.parents[j]
 	}
-	return i
+
+	uf.parents[i] = j // set i's parent as the found root
+
+	return j
 }
 ```
 
+### Step 3
+- 3つの方法を実装してきたが、実務で選択を迫られたらDFSを使うだろうと思った。理由は以下の通り
+  - まずunion-findはエンジニアの常識として良いのかどうか微妙なところ。あと時間計算量がO(mn logmn)で他より劣るし、最適化のために様々な工夫が必要で可読性が落ちる
+  - BFSとDFSの空間計算量は理論上同じだが、LeetCodeの計測時間はDFSの方が良かった。考えられる理由としては、キューとスタックのパフォーマンスの違い
+    - キューは先頭のメモリが変わっていくため、使用メモリが格納された要素数より大きくなる。一方、スタックは先頭が固定されており、要素数が使用メモリの上限となる
+    - Goのスライスは先頭のポインタ、長さ、容量の3つを保持しているらしい。キューのように先頭が変わるとポインタを付け替える必要がある
+    - 参考
+      - https://scrappedscript.com/comparing-data-structures-stacks-vs-queues
+      - https://go.dev/blog/slices-intro
+- 2aからの変更点
+  - DFSに用いるスタックの名前。`idxStack`だと何のインデックスを格納しているのかわからないので、`unvisitedLandIdxStack`とすることに
+  - スタックからpopされた値をpeekと名付けていたが、これはよろしくない。peekは山の頂という意味のピークだと思っていたが、実際は覗くというメソッドの名前として使われる単語。山の頂はpeak。英語がややこしいのでtopとすることに。topはスタック関連で標準的に使われている
+
+```Go
+const (
+	water         = '0'
+	unvisitedLand = '1'
+	visitedLand   = '2'
+)
+
+func numIslands(grid [][]byte) int {
+	if len(grid) == 0 {
+		log.Fatal("length of grid is 0")
+	}
+	rowSize, columnSize := len(grid), len(grid[0])
+	islands := 0
+
+	for r := 0; r < rowSize; r++ {
+		for c := 0; c < columnSize; c++ {
+			if grid[r][c] != unvisitedLand {
+				continue
+			}
+			grid = markIslandAsVisited(r, c, grid, rowSize, columnSize)
+			islands++
+		}
+	}
+
+	return islands
+}
+
+func markIslandAsVisited(srcRow, srcColumn int, grid [][]byte, rowSize, columnSize int) [][]byte {
+	unvisitedLandIdxStack := [][2]int{{srcRow, srcColumn}}
+	grid[srcRow][srcColumn] = visitedLand
+
+	traverseNeighbors := func(r, c int) {
+		neighbors := [4][2]int{{r + 1, c}, {r - 1, c}, {r, c + 1}, {r, c - 1}}
+		for _, n := range neighbors {
+			nr, nc := n[0], n[1]
+			if !(0 <= nr && nr < rowSize && 0 <= nc && nc < columnSize) {
+				continue
+			}
+			if grid[nr][nc] != unvisitedLand {
+				continue
+			}
+			unvisitedLandIdxStack = append(unvisitedLandIdxStack, [2]int{nr, nc})
+			grid[nr][nc] = visitedLand
+		}
+	}
+
+	for len(unvisitedLandIdxStack) > 0 {
+		// pop from unvisitedLandIdxStack
+		l := len(unvisitedLandIdxStack)
+		top := unvisitedLandIdxStack[l-1]
+		unvisitedLandIdxStack = unvisitedLandIdxStack[:l-1]
+
+		r, c := top[0], top[1]
+		traverseNeighbors(r, c)
+	}
+
+	return grid
+}
+```
