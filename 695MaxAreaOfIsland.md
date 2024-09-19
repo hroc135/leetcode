@@ -96,7 +96,7 @@ computeIslandArea関数内では、`if grid[r][c] == water { continue } if visit
   - pass by referenceとpass by valueをよく理解していなかったが、以下の記事がわかりやすく解説してくれていた
     - https://david-yappeter.medium.com/golang-pass-by-value-vs-pass-by-reference-e48aac8b2716
   - Goのpass by referenceは、slice, map
-  - Goのpass by valueは、int, floatなどの数値型、array, struct
+  - Goのpass by valueは、int, floatなどの数値型、string, rune, array, struct
 
 ```Go
 const (
