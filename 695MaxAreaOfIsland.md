@@ -171,3 +171,192 @@ func computeIslandArea(src index, rowSize, columnSize int, grid [][]int, visited
 	return area
 }
 ```
+
+- 他の方の回答を読む時間
+- https://github.com/goto-untrapped/Arai60/pull/31/files#r1650006241
+  - 再帰の深さについての分析
+- https://discord.com/channels/1084280443945353267/1230079550923341835/1231038652327657492
+  - このスレッドは得られる情報が多かった
+  - step1のコードはmap(実質集合)で探索済みインデックスを管理しているが、gridと同じサイズの配列を用意して管理した方が速そう。下記にローカルで検証した結果を記載
+  - 理由はハッシュの計算に時間がかかるから（もちろんめちゃくちゃ長いというわけではないだろうが）
+  - 講師陣の方もmediumの問題で15分以上かかるものがある。分散がかなり大きそう。なので10分以内は一つの基準としつつ、時間にこだわりすぎない。それより実装中何を考えたかというところに意識を向けることがArai60の取り組みの本質のはず
+
+- Union-Findデータ構造を使って解いてみる
+- 前門の[200. Number of Islands](https://leetcode.com/problems/number-of-islands/description/)では木のランクによる最適化を行ったが、今回は、木の要素数が島の面積となるため、そちらを使って最適化する方法を実装する
+- 参考：https://qiita.com/saka_pon/items/2f18c84f1b6834e4fe4a#union-by-size
+- 実装後、以下リンク先を見て不要な条件を調べていることに気がついた
+  - https://github.com/hayashi-ay/leetcode/pull/34/files#r1502553199
+
+```Go
+const (
+	water = 0
+	land  = 1
+)
+
+func maxAreaOfIsland(grid [][]int) int {
+	if len(grid) == 0 {
+		return -1 // better to do something like `return 0, errors.New()`
+	}
+	rowSize, columnSize := len(grid), len(grid[0])
+	uff := initUnionFindForest(grid, rowSize, columnSize)
+	maxArea := 0
+
+	for r := 0; r < rowSize; r++ {
+		for c := 0; c < columnSize; c++ {
+			if grid[r][c] == water {
+				continue
+			}
+			area := 1
+			index := twoDimensionToOneDimension(r, c, columnSize)
+			if r+1 < rowSize && c < columnSize && grid[r+1][c] == land {
+				area = uff.union(index, twoDimensionToOneDimension(r+1, c, columnSize))
+			}
+			if r < rowSize && c+1 < columnSize && grid[r][c+1] == land {
+				area = uff.union(index, twoDimensionToOneDimension(r, c+1, columnSize))
+			}
+			maxArea = max(maxArea, area)
+		}
+	}
+
+	return maxArea
+}
+
+func twoDimensionToOneDimension(row, column, columnSize int) int {
+	return row*columnSize + column
+}
+
+// A unionFindForest represents a union-find data structure with an one-dimensional slice.
+type unionFindForest struct {
+	// parents is a slice of indices of parent node index.
+	// When parents[i] == i, i is the root of the tree.
+	// parents[i] is -1 when i is the index of water in the grid.
+	parents []int
+
+	// elementCounts is a slice that holds the count of elements in the tree.
+	// Only elementCounts[i], where i is the index of the root, is reliable.
+	elementCounts []int
+}
+
+func initUnionFindForest(grid [][]int, rowSize, columnSize int) unionFindForest {
+	parents := make([]int, rowSize*columnSize)
+	elementCounts := make([]int, rowSize*columnSize)
+
+	for r := 0; r < rowSize; r++ {
+		for c := 0; c < columnSize; c++ {
+			index := twoDimensionToOneDimension(r, c, columnSize)
+			if grid[r][c] == water {
+				parents[index] = -1
+				continue
+			}
+			parents[index] = index
+			elementCounts[index] = 1
+		}
+	}
+
+	return unionFindForest{parents: parents, elementCounts: elementCounts}
+}
+
+// union returns the number of elements in the united tree
+func (uff *unionFindForest) union(i, j int) int {
+	iRoot, jRoot := uff.find(i), uff.find(j)
+	if iRoot == jRoot {
+		return uff.elementCounts[iRoot]
+	}
+
+	if uff.elementCounts[iRoot] <= uff.elementCounts[jRoot] {
+		uff.parents[iRoot] = jRoot
+		uff.elementCounts[jRoot] += uff.elementCounts[iRoot]
+		return uff.elementCounts[jRoot]
+	} else {
+		uff.parents[jRoot] = iRoot
+		uff.elementCounts[iRoot] += uff.elementCounts[jRoot]
+		return uff.elementCounts[iRoot]
+	}
+}
+
+func (uff *unionFindForest) find(i int) int {
+	j := i
+	for j != uff.parents[j] {
+		j = uff.parents[j]
+	}
+	uff.parents[i] = j // set the parent of i to the found root
+	return j
+}
+```
+
+### Step 3
+- 最後はスタックによるDFSで実装
+- 訪問済みかどうかは二次元配列のbool値で管理することに
+- 集合で管理する方法と比べ、LeetCode上で実行時間と使用メモリ量ともに改善した
+  - 実行時間が改善した理由として考えられることは、上述のようにハッシュを計算する時間が必要なくなったこと
+  - 使用メモリ量が改善したのは、mapは再ハッシュしなくて済むよう多めにメモリを割り当てるから
+
+```Go
+const (
+	water = 0
+	land  = 1
+)
+
+type index struct {
+	row, column int
+}
+
+func maxAreaOfIsland(grid [][]int) int {
+	if len(grid) == 0 {
+		return 0
+	}
+	rowSize, columnSize := len(grid), len(grid[0])
+	isVisitedLand := make([][]bool, rowSize)
+	for r := 0; r < rowSize; r++ {
+		isVisitedLand[r] = make([]bool, columnSize)
+	}
+	maxArea := 0
+
+	for r := 0; r < rowSize; r++ {
+		for c := 0; c < columnSize; c++ {
+			if grid[r][c] == water {
+				continue
+			}
+			src := index{row: r, column: c}
+			area := computeIslandArea(src, grid, rowSize, columnSize, isVisitedLand)
+			maxArea = max(maxArea, area)
+		}
+	}
+
+	return maxArea
+}
+
+func computeIslandArea(src index, grid [][]int, rowSize, columnSize int, isVisitedLand [][]bool) int {
+	landStack := []index{src}
+	isVisitedLand[src.row][src.column] = true
+	area := 1
+
+	for len(landStack) > 0 {
+		// pop from landStack
+		n := len(landStack)
+		top := landStack[n-1]
+		landStack = landStack[:n-1]
+
+		neighbors := []index{
+			{row: top.row + 1, column: top.column},
+			{row: top.row - 1, column: top.column},
+			{row: top.row, column: top.column + 1},
+			{row: top.row, column: top.column - 1},
+		}
+		for _, neighbor := range neighbors {
+			r, c := neighbor.row, neighbor.column
+			if !(0 <= r && r < rowSize && 0 <= c && c < columnSize) {
+				continue
+			}
+			if grid[r][c] == water || isVisitedLand[r][c] {
+				continue
+			}
+			landStack = append(landStack, neighbor)
+			isVisitedLand[r][c] = true
+			area++
+		}
+	}
+
+	return area
+}
+```
