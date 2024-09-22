@@ -4,6 +4,8 @@
 - 「beginWordがwordListに必ずしも含まれているわけではない」という条件で少し躓いた
 - ローカルのテストケースで無限ループに陥った。wordに対して訪問済みマークをつけるのを忘れていたことが原因
 - 実装後、Wrong Answerが出た。パスの長さの管理が適切にできていなかったことが原因
+- 時間計算量：O(n^2) (nはwordListの要素数。本当は、beginWordの長さをmとしてO(n^2 m)だが、m <= 10なので無視できる)
+- 空間計算量：O(n^2)
 
 ```Go
 func ladderLength(beginWord string, endWord string, wordList []string) int {
@@ -78,3 +80,59 @@ func isTransformable(word1, word2 string) bool {
 	return differentCharacterCount == 1
 }
 ```
+
+### Step 2
+- step1は無向グラフを完成させてから探索を始めたが、パフォーマンス改善のため、beginWordを始点としてグラフを作りながら探索することに
+- ところが実行時間がstep1より1桁遅くなった
+- 考えられる原因としては、グラフが疎だったから。つまり、wordListの要素数に対して、wordList[i]がtransformableな要素数が少ないので、内側のループで毎回wordListの全ての要素を調べることが非効率になってしまっている
+
+```Go
+type transformationGraphNode struct {
+	word  string
+	level int
+}
+
+func ladderLength(beginWord string, endWord string, wordList []string) int {
+	wordQueue := []transformationGraphNode{{word: beginWord, level: 1}}
+	visitedWords := make(map[string]struct{}, len(wordList))
+
+	for len(wordQueue) > 0 {
+		first := wordQueue[0]
+		wordQueue = wordQueue[1:]
+
+		for _, w := range wordList {
+			if w == first.word {
+				continue
+			}
+			if _, ok := visitedWords[w]; ok {
+				continue
+			}
+			if !isTransformable(w, first.word) {
+				continue
+			}
+			if w == endWord {
+				return first.level + 1
+			}
+			wordQueue = append(wordQueue, transformationGraphNode{word: w, level: first.level + 1})
+			visitedWords[w] = struct{}{}
+		}
+	}
+
+	return 0
+}
+
+func isTransformable(word1, word2 string) bool {
+	differentCharacterCount := 0
+	for i := 0; i < len(word1); i++ {
+		if word1[i] != word2[i] {
+			differentCharacterCount++
+			if differentCharacterCount > 1 {
+				return false
+			}
+		}
+	}
+
+	return differentCharacterCount == 1
+}
+```
+
