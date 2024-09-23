@@ -136,3 +136,12 @@ func isTransformable(word1, word2 string) bool {
 }
 ```
 
+- ハミング距離：https://en.wikipedia.org/wiki/Hamming_distance
+  - 同じ長さの2つの配列 or 文字列において、一方を何文字置換すればもう一方と等しくなるか。まさに今回計算する必要のある距離
+
+
+- ToDo
+  - ahayashiさんのプルリクを読む(https://github.com/hayashi-ay/leetcode/pull/42/files)
+  - https://discord.com/channels/1084280443945353267/1200089668901937312/1215955040930631690
+  - レーベンシュタイン距離を求める実装をする
+  - 遅延評価(Lazy Evaluation)とは
