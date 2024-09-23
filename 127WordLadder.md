@@ -84,7 +84,8 @@ func isTransformable(word1, word2 string) bool {
 ### Step 2
 - step1は無向グラフを完成させてから探索を始めたが、パフォーマンス改善のため、beginWordを始点としてグラフを作りながら探索することに
 - ところが実行時間がstep1より1桁遅くなった
-- 考えられる原因としては、グラフが疎だったから。つまり、wordListの要素数に対して、wordList[i]がtransformableな要素数が少ないので、内側のループで毎回wordListの全ての要素を調べることが非効率になってしまっている
+- 考えられる原因としては、isTransformableをn^2回実行しなくてはいけなくなったから。step1のコードではisTransformable(a, b)実行したらisTransformable(b, a)はやらずに済み、(n^2)/2回で済んでいた
+  - https://discord.com/channels/1084280443945353267/1200089668901937312/1215956494034534461
 
 ```Go
 type transformationGraphNode struct {
@@ -136,12 +137,89 @@ func isTransformable(word1, word2 string) bool {
 }
 ```
 
+- 以下リンクを参考に、文字列を前半と後半に分けてバケットに入れる方法を実装してみる
+- https://discord.com/channels/1084280443945353267/1200089668901937312/1216123084889788486
+- https://cs.stackexchange.com/questions/93467/data-structure-or-algorithm-for-quickly-finding-differences-between-strings
+- 速くなると思ったらLeetcodeの実行時間はstep1のBFSとほぼ同じ
+- firstHalfToSecondHalfとsecondHalfToFirstHalfの初期化はO(n)でできており、BFSの無向グラフ初期化は0(n^2 / 2)なのでこの部分はかなり短縮できたはず
+- 一方、isOneCharacterDifferent(str1, str2)とisOneCharacterDifferent(str2, str1)を計算せねばならず、これを必要としないstep1 BFSの方がこの部分が効率的になっている。GoにPythonのようなcacheデコレータがあれば簡単に改善できたはず
+
+```Go
+func ladderLength(beginWord string, endWord string, wordList []string) int {
+	firstHalfToSecondHalf := make(map[string][]string, len(wordList)+1)
+	secondHalfToFirstHalf := make(map[string][]string, len(wordList)+1)
+	firstHalfToSecondHalf[firstHalf(beginWord)] = []string{secondHalf(beginWord)}
+	secondHalfToFirstHalf[secondHalf(beginWord)] = []string{firstHalf(beginWord)}
+	for _, w := range wordList {
+		firstHalfToSecondHalf[firstHalf(w)] = append(firstHalfToSecondHalf[firstHalf(w)], secondHalf(w))
+		secondHalfToFirstHalf[secondHalf(w)] = append(secondHalfToFirstHalf[secondHalf(w)], firstHalf(w))
+	}
+
+	level := 1
+	wordsInSameLevel := []string{beginWord}
+	addedWords := map[string]struct{}{beginWord: {}}
+	for len(wordsInSameLevel) > 0 {
+		level++
+		nextLevel := []string{}
+		for _, w1 := range wordsInSameLevel {
+			w1FirstHalf, w1SecondHalf := firstHalf(w1), secondHalf(w1)
+			for _, w2SecondHalf := range firstHalfToSecondHalf[w1FirstHalf] {
+				w2 := w1FirstHalf + w2SecondHalf
+				if _, ok := addedWords[w2]; ok || !isOneCharacterDifferent(w1SecondHalf, w2SecondHalf) {
+					continue
+				}
+				if w2 == endWord {
+					return level
+				}
+				nextLevel = append(nextLevel, w2)
+				addedWords[w2] = struct{}{}
+			}
+			for _, w2FirstHalf := range secondHalfToFirstHalf[w1SecondHalf] {
+				w2 := w2FirstHalf + w1SecondHalf
+				if _, ok := addedWords[w2]; ok || !isOneCharacterDifferent(w1FirstHalf, w2FirstHalf) {
+					continue
+				}
+				if w2 == endWord {
+					return level
+				}
+				nextLevel = append(nextLevel, w2)
+				addedWords[w2] = struct{}{}
+			}
+		}
+		wordsInSameLevel = nextLevel
+	}
+
+	return 0
+}
+
+func firstHalf(word string) string {
+	return word[:(len(word)+1)/2]
+}
+
+func secondHalf(word string) string {
+	return word[(len(word)+1)/2:]
+}
+
+func isOneCharacterDifferent(str1, str2 string) bool {
+	if str1 == str2 {
+		return false
+	}
+	difference := 0
+	for i := 0; i < len(str1); i++ {
+		if str1[i] != str2[i] {
+			difference++
+			if difference > 1 {
+				return false
+			}
+		}
+	}
+	return true
+}
+```
+
 - ハミング距離：https://en.wikipedia.org/wiki/Hamming_distance
   - 同じ長さの2つの配列 or 文字列において、一方を何文字置換すればもう一方と等しくなるか。まさに今回計算する必要のある距離
 
 
 - ToDo
-  - ahayashiさんのプルリクを読む(https://github.com/hayashi-ay/leetcode/pull/42/files)
-  - https://discord.com/channels/1084280443945353267/1200089668901937312/1215955040930631690
   - レーベンシュタイン距離を求める実装をする
-  - 遅延評価(Lazy Evaluation)とは
