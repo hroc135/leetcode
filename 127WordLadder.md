@@ -296,3 +296,4 @@ func isTransformable(word1, word2 string) bool {
 
 - ToDo
   - レーベンシュタイン距離を求める実装をする
+  - step2の前半後半分ける方法にキャッシュ機能を加えて実装する
