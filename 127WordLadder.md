@@ -217,9 +217,82 @@ func isOneCharacterDifferent(str1, str2 string) bool {
 }
 ```
 
-- ハミング距離：https://en.wikipedia.org/wiki/Hamming_distance
-  - 同じ長さの2つの配列 or 文字列において、一方を何文字置換すればもう一方と等しくなるか。まさに今回計算する必要のある距離
+### Step 3
+- 最も素直な解放はやはり隣接リストを作ってBFSで最短経路を探す方法だろう、ということでこれをstep3として実装する
+- この問題の自分的に気持ち悪いところとして、wordListにbeginWordが含まれていたり含まれていなかったりすることが挙げられる
+- これを解消するためにwordListにbeginWordを追加する処理を加えた。ただし、破壊的変更を加えないよう注意した
 
+```Go
+func ladderLength(beginWord string, endWord string, wordList []string) int {
+	adjacencyWords := initAdjacencyWordsList(beginWord, wordList)
+	return computeShortestPath(beginWord, endWord, adjacencyWords, len(wordList)+1)
+}
+
+func initAdjacencyWordsList(beginWord string, wordList []string) map[string][]string {
+	wordListWithBeginWord := createWordListWithBeginWord(beginWord, wordList)
+	adjacencyWords := make(map[string][]string, len(wordListWithBeginWord))
+	for i := 0; i < len(wordListWithBeginWord)-1; i++ {
+		for j := i + 1; j < len(wordListWithBeginWord); j++ {
+			if isTransformable(wordListWithBeginWord[i], wordListWithBeginWord[j]) {
+				adjacencyWords[wordListWithBeginWord[i]] = append(adjacencyWords[wordListWithBeginWord[i]], wordListWithBeginWord[j])
+				adjacencyWords[wordListWithBeginWord[j]] = append(adjacencyWords[wordListWithBeginWord[j]], wordListWithBeginWord[i])
+			}
+		}
+	}
+
+	return adjacencyWords
+}
+
+func createWordListWithBeginWord(beginWord string, wordList []string) []string {
+	if slices.Contains(wordList, beginWord) {
+		return wordList
+	}
+	wordListCopy := make([]string, len(wordList)+1)
+	copy(wordListCopy, append(wordList, beginWord))
+	return wordListCopy
+}
+
+func computeShortestPath(beginWord, endWord string, adjacencyWords map[string][]string, totalWordCount int) int {
+	type treeNode struct {
+		word  string
+		level int
+	}
+
+	nodeQueue := []treeNode{{word: beginWord, level: 1}}
+	visitedWords := make(map[string]struct{}, totalWordCount)
+	visitedWords[beginWord] = struct{}{}
+	for len(nodeQueue) > 0 {
+		first := nodeQueue[0]
+		nodeQueue = nodeQueue[1:]
+
+		for _, w := range adjacencyWords[first.word] {
+			if w == endWord {
+				return first.level + 1
+			}
+			if _, ok := visitedWords[w]; ok {
+				continue
+			}
+			nodeQueue = append(nodeQueue, treeNode{word: w, level: first.level + 1})
+			visitedWords[w] = struct{}{}
+		}
+	}
+
+	return 0
+}
+
+func isTransformable(word1, word2 string) bool {
+	difference := 0
+	for i := 0; i < len(word1); i++ {
+		if word1[i] != word2[i] {
+			difference++
+			if difference > 1 {
+				return false
+			}
+		}
+	}
+	return difference == 1
+}
+```
 
 - ToDo
   - レーベンシュタイン距離を求める実装をする
