@@ -1,0 +1,299 @@
+### Step 1
+- 変換可能なwordを繋げた無向グラフを作成し、BFSで最短距離を探索する方法を思いついた
+- 方針はすぐに思いついたが、いくつか実装を悩む点があり、かなり時間がかかった（1時間くらい？）
+- 「beginWordがwordListに必ずしも含まれているわけではない」という条件で少し躓いた
+- ローカルのテストケースで無限ループに陥った。wordに対して訪問済みマークをつけるのを忘れていたことが原因
+- 実装後、Wrong Answerが出た。パスの長さの管理が適切にできていなかったことが原因
+- 時間計算量：O(n^2) (nはwordListの要素数。本当は、beginWordの長さをmとしてO(n^2 m)だが、m <= 10なので無視できる)
+- 空間計算量：O(n^2)
+
+```Go
+func ladderLength(beginWord string, endWord string, wordList []string) int {
+	transformationGraph := initTransformationGraph(beginWord, wordList)
+	return searchShortestPathToEndWord(beginWord, endWord, transformationGraph)
+}
+
+func initTransformationGraph(beginWord string, wordList []string) map[string][]string {
+	transformationGraph := make(map[string][]string, len(wordList)+1)
+
+	transformationGraph[beginWord] = []string{}
+	for _, w1 := range wordList {
+		if isTransformable(w1, beginWord) {
+			transformationGraph[beginWord] = append(transformationGraph[beginWord], w1)
+			transformationGraph[w1] = []string{beginWord}
+			continue
+		}
+		transformationGraph[w1] = []string{}
+	}
+
+	for i := 0; i < len(wordList)-1; i++ {
+		for j := i + 1; j < len(wordList); j++ {
+			if isTransformable(wordList[i], wordList[j]) {
+				transformationGraph[wordList[i]] = append(transformationGraph[wordList[i]], wordList[j])
+				transformationGraph[wordList[j]] = append(transformationGraph[wordList[j]], wordList[i])
+			}
+		}
+	}
+
+	return transformationGraph
+}
+
+func searchShortestPathToEndWord(beginWord, endWord string, transformationGraph map[string][]string) int {
+	type graphNode struct {
+		word  string
+		level int
+	}
+
+	checkedWords := make(map[string]struct{})
+	wordQueue := []graphNode{{word: beginWord, level: 1}}
+
+	for len(wordQueue) > 0 {
+		first := wordQueue[0]
+		wordQueue = wordQueue[1:]
+
+		for _, w := range transformationGraph[first.word] {
+			if w == endWord {
+				return first.level + 1
+			}
+			if _, ok := checkedWords[w]; ok {
+				continue
+			}
+			wordQueue = append(wordQueue, graphNode{word: w, level: first.level + 1})
+			checkedWords[w] = struct{}{}
+		}
+	}
+
+	return 0
+}
+
+func isTransformable(word1, word2 string) bool {
+	differentCharacterCount := 0
+	for i := 0; i < len(word1); i++ {
+		if word1[i] != word2[i] {
+			differentCharacterCount++
+			if differentCharacterCount > 1 {
+				return false
+			}
+		}
+	}
+
+	return differentCharacterCount == 1
+}
+```
+
+### Step 2
+- step1は無向グラフを完成させてから探索を始めたが、パフォーマンス改善のため、beginWordを始点としてグラフを作りながら探索することに
+- ところが実行時間がstep1より1桁遅くなった
+- 考えられる原因としては、isTransformableをn^2回実行しなくてはいけなくなったから。step1のコードではisTransformable(a, b)実行したらisTransformable(b, a)はやらずに済み、(n^2)/2回で済んでいた
+  - https://discord.com/channels/1084280443945353267/1200089668901937312/1215956494034534461
+
+```Go
+type transformationGraphNode struct {
+	word  string
+	level int
+}
+
+func ladderLength(beginWord string, endWord string, wordList []string) int {
+	wordQueue := []transformationGraphNode{{word: beginWord, level: 1}}
+	visitedWords := make(map[string]struct{}, len(wordList))
+
+	for len(wordQueue) > 0 {
+		first := wordQueue[0]
+		wordQueue = wordQueue[1:]
+
+		for _, w := range wordList {
+			if w == first.word {
+				continue
+			}
+			if _, ok := visitedWords[w]; ok {
+				continue
+			}
+			if !isTransformable(w, first.word) {
+				continue
+			}
+			if w == endWord {
+				return first.level + 1
+			}
+			wordQueue = append(wordQueue, transformationGraphNode{word: w, level: first.level + 1})
+			visitedWords[w] = struct{}{}
+		}
+	}
+
+	return 0
+}
+
+func isTransformable(word1, word2 string) bool {
+	differentCharacterCount := 0
+	for i := 0; i < len(word1); i++ {
+		if word1[i] != word2[i] {
+			differentCharacterCount++
+			if differentCharacterCount > 1 {
+				return false
+			}
+		}
+	}
+
+	return differentCharacterCount == 1
+}
+```
+
+- 以下リンクを参考に、文字列を前半と後半に分けてバケットに入れる方法を実装してみる
+- https://discord.com/channels/1084280443945353267/1200089668901937312/1216123084889788486
+- https://cs.stackexchange.com/questions/93467/data-structure-or-algorithm-for-quickly-finding-differences-between-strings
+- 速くなると思ったらLeetcodeの実行時間はstep1のBFSとほぼ同じ
+- firstHalfToSecondHalfとsecondHalfToFirstHalfの初期化はO(n)でできており、BFSの無向グラフ初期化は0(n^2 / 2)なのでこの部分はかなり短縮できたはず
+- 一方、isOneCharacterDifferent(str1, str2)とisOneCharacterDifferent(str2, str1)を計算せねばならず、これを必要としないstep1 BFSの方がこの部分が効率的になっている。GoにPythonのようなcacheデコレータがあれば簡単に改善できたはず
+
+```Go
+func ladderLength(beginWord string, endWord string, wordList []string) int {
+	firstHalfToSecondHalf := make(map[string][]string, len(wordList)+1)
+	secondHalfToFirstHalf := make(map[string][]string, len(wordList)+1)
+	firstHalfToSecondHalf[firstHalf(beginWord)] = []string{secondHalf(beginWord)}
+	secondHalfToFirstHalf[secondHalf(beginWord)] = []string{firstHalf(beginWord)}
+	for _, w := range wordList {
+		firstHalfToSecondHalf[firstHalf(w)] = append(firstHalfToSecondHalf[firstHalf(w)], secondHalf(w))
+		secondHalfToFirstHalf[secondHalf(w)] = append(secondHalfToFirstHalf[secondHalf(w)], firstHalf(w))
+	}
+
+	level := 1
+	wordsInSameLevel := []string{beginWord}
+	addedWords := map[string]struct{}{beginWord: {}}
+	for len(wordsInSameLevel) > 0 {
+		level++
+		nextLevel := []string{}
+		for _, w1 := range wordsInSameLevel {
+			w1FirstHalf, w1SecondHalf := firstHalf(w1), secondHalf(w1)
+			for _, w2SecondHalf := range firstHalfToSecondHalf[w1FirstHalf] {
+				w2 := w1FirstHalf + w2SecondHalf
+				if _, ok := addedWords[w2]; ok || !isOneCharacterDifferent(w1SecondHalf, w2SecondHalf) {
+					continue
+				}
+				if w2 == endWord {
+					return level
+				}
+				nextLevel = append(nextLevel, w2)
+				addedWords[w2] = struct{}{}
+			}
+			for _, w2FirstHalf := range secondHalfToFirstHalf[w1SecondHalf] {
+				w2 := w2FirstHalf + w1SecondHalf
+				if _, ok := addedWords[w2]; ok || !isOneCharacterDifferent(w1FirstHalf, w2FirstHalf) {
+					continue
+				}
+				if w2 == endWord {
+					return level
+				}
+				nextLevel = append(nextLevel, w2)
+				addedWords[w2] = struct{}{}
+			}
+		}
+		wordsInSameLevel = nextLevel
+	}
+
+	return 0
+}
+
+func firstHalf(word string) string {
+	return word[:(len(word)+1)/2]
+}
+
+func secondHalf(word string) string {
+	return word[(len(word)+1)/2:]
+}
+
+func isOneCharacterDifferent(str1, str2 string) bool {
+	if str1 == str2 {
+		return false
+	}
+	difference := 0
+	for i := 0; i < len(str1); i++ {
+		if str1[i] != str2[i] {
+			difference++
+			if difference > 1 {
+				return false
+			}
+		}
+	}
+	return true
+}
+```
+
+### Step 3
+- 最も素直な解放はやはり隣接リストを作ってBFSで最短経路を探す方法だろう、ということでこれをstep3として実装する
+- この問題の自分的に気持ち悪いところとして、wordListにbeginWordが含まれていたり含まれていなかったりすることが挙げられる
+- これを解消するためにwordListにbeginWordを追加する処理を加えた。ただし、破壊的変更を加えないよう注意した
+
+```Go
+func ladderLength(beginWord string, endWord string, wordList []string) int {
+	adjacencyWords := initAdjacencyWordsList(beginWord, wordList)
+	return computeShortestPath(beginWord, endWord, adjacencyWords, len(wordList)+1)
+}
+
+func initAdjacencyWordsList(beginWord string, wordList []string) map[string][]string {
+	wordListWithBeginWord := createWordListWithBeginWord(beginWord, wordList)
+	adjacencyWords := make(map[string][]string, len(wordListWithBeginWord))
+	for i := 0; i < len(wordListWithBeginWord)-1; i++ {
+		for j := i + 1; j < len(wordListWithBeginWord); j++ {
+			if isTransformable(wordListWithBeginWord[i], wordListWithBeginWord[j]) {
+				adjacencyWords[wordListWithBeginWord[i]] = append(adjacencyWords[wordListWithBeginWord[i]], wordListWithBeginWord[j])
+				adjacencyWords[wordListWithBeginWord[j]] = append(adjacencyWords[wordListWithBeginWord[j]], wordListWithBeginWord[i])
+			}
+		}
+	}
+
+	return adjacencyWords
+}
+
+func createWordListWithBeginWord(beginWord string, wordList []string) []string {
+	if slices.Contains(wordList, beginWord) {
+		return wordList
+	}
+	wordListCopy := make([]string, len(wordList)+1)
+	copy(wordListCopy, append(wordList, beginWord))
+	return wordListCopy
+}
+
+func computeShortestPath(beginWord, endWord string, adjacencyWords map[string][]string, totalWordCount int) int {
+	type treeNode struct {
+		word  string
+		level int
+	}
+
+	nodeQueue := []treeNode{{word: beginWord, level: 1}}
+	visitedWords := make(map[string]struct{}, totalWordCount)
+	visitedWords[beginWord] = struct{}{}
+	for len(nodeQueue) > 0 {
+		first := nodeQueue[0]
+		nodeQueue = nodeQueue[1:]
+
+		for _, w := range adjacencyWords[first.word] {
+			if w == endWord {
+				return first.level + 1
+			}
+			if _, ok := visitedWords[w]; ok {
+				continue
+			}
+			nodeQueue = append(nodeQueue, treeNode{word: w, level: first.level + 1})
+			visitedWords[w] = struct{}{}
+		}
+	}
+
+	return 0
+}
+
+func isTransformable(word1, word2 string) bool {
+	difference := 0
+	for i := 0; i < len(word1); i++ {
+		if word1[i] != word2[i] {
+			difference++
+			if difference > 1 {
+				return false
+			}
+		}
+	}
+	return difference == 1
+}
+```
+
+- ToDo
+  - レーベンシュタイン距離を求める実装をする
+  - step2の前半後半分ける方法にキャッシュ機能を加えて実装する
