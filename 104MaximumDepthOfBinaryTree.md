@@ -108,6 +108,9 @@ func maxDepth(root *TreeNode) int {
 - Goのスタックメモリサイズ1GBはかなり大きいので再帰を怖がらずに使おう、ということで最後は再帰の美しいコードで締める
   - C#, Java: 1MB
   - Ruby: 256KB
+- ※追記 Goの再帰コードはそんなに望ましくないらしいです。
+  - https://zenn.dev/nobonobo/articles/e651c66a15aaed657d6e#%E6%80%A7%E8%83%BD%E3%81%AFgo%E4%B8%AD%E7%B4%9A%E3%81%A7c++%E7%8E%84%E4%BA%BA%E3%81%AE9%E5%89%B2%E4%BB%A5%E4%B8%8A
+  - https://ymotongpoo.hatenablog.com/about
 
 ```Go
 func maxDepth(root *TreeNode) int {
