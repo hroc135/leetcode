@@ -80,7 +80,7 @@ func createNewTree(treeMap map[int]int) *TreeNode {
 ```
 
 - https://discord.com/channels/1084280443945353267/1200089668901937312/1204285380095119390 を見てやり方を理解して自分で実装
-- 再帰の深さは今回は高々4000。フレームサイズは、引数(8*2) + ローカル変数(8) + 戻り値アドレス(8) + 戻り値(8) + ベースポインタ(8) = 48B。
+- 再帰の深さは今回は高々2000。フレームサイズは、引数(8*2) + ローカル変数(8) + 戻り値アドレス(8) + 戻り値(8) + ベースポインタ(8) = 48B。
 なので、スタックサイズは 2000 * 48B ≒ 100KB。Goランタイムのスタックサイズ1GBなら大丈夫
 - 参照透過性を意識して、全て新しくノードを作る
 - 時間計算量：O(n1 + n2)
@@ -234,6 +234,50 @@ func deepcopyDescendants(dst, src *TreeNode) {
 			stack = append(stack, [2]*TreeNode{topDst.Right, topSrc.Right})
 		}
 	}
+}
+```
+
+#### 2c
+- https://discord.com/channels/1084280443945353267/1251052599294296114/1290606968762798141 を参照
+- ダブルポインタを使うのがなるほどと思った
+
+```Go
+type nodes struct {
+	node1, node2 *TreeNode
+	mergedNode   **TreeNode
+}
+
+func mergeTrees(root1 *TreeNode, root2 *TreeNode) *TreeNode {
+	var result *TreeNode
+	stack := make([]nodes, 0, 4000)
+	stack = append(stack, nodes{node1: root1, node2: root2, mergedNode: &result})
+
+	for len(stack) > 0 {
+		top := stack[len(stack)-1]
+		node1, node2, ref := top.node1, top.node2, top.mergedNode
+		stack = stack[:len(stack)-1]
+		if node1 == nil && node2 == nil {
+			continue
+		}
+		*ref = &TreeNode{}
+		added := *ref
+		if node1 == nil {
+			added.Val += node2.Val
+			stack = append(stack, nodes{node1: nil, node2: node2.Left, mergedNode: &added.Left})
+			stack = append(stack, nodes{node1: nil, node2: node2.Right, mergedNode: &added.Right})
+			continue
+		}
+		if node2 == nil {
+			added.Val += node1.Val
+			stack = append(stack, nodes{node1: node1.Left, node2: nil, mergedNode: &added.Left})
+			stack = append(stack, nodes{node1: node1.Right, node2: nil, mergedNode: &added.Right})
+			continue
+		}
+		added.Val += node1.Val + node2.Val
+		stack = append(stack, nodes{node1: node1.Left, node2: node2.Left, mergedNode: &added.Left})
+		stack = append(stack, nodes{node1: node1.Right, node2: node2.Right, mergedNode: &added.Right})
+	}
+	return result
 }
 ```
 
