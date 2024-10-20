@@ -219,3 +219,41 @@ func sortedArrayToBST(nums []int) *TreeNode {
 	return middle
 }
 ```
+
+### Step 4
+#### 4a in-order
+- https://github.com/hroc135/leetcode/pull/23#issuecomment-2418322326 を受けて
+- アルゴリズムの言語化
+	- (buildCBT関数)numsの要素数だけ左詰めのバイナリーツリーを空ノードで構成。
+	- (setValues関数)buildCBTで作ったツリーに値をin-orderで当てはめていく。
+	この際、任意のサブツリーの根は左側の子より大きい値で、右側の子より小さい値であるので、
+	左側の子 -> 根 -> 右側の子 の順にnumsの前から値を取り出して当てはめていけば良い
+
+```Go
+func sortedArrayToBST(nums []int) *TreeNode {
+	cbtRoot := buildCBT(0, len(nums))
+	setValues(cbtRoot, &nums)
+	return cbtRoot
+}
+
+// buildCBT returns the root of the complete binary tree.
+func buildCBT(index int, numsLen int) *TreeNode {
+	if index >= numsLen {
+		return nil
+	}
+	node := &TreeNode{}
+	node.Left = buildCBT(index*2+1, numsLen)
+	node.Right = buildCBT(index*2+2, numsLen)
+	return node
+}
+
+func setValues(root *TreeNode, nums *[]int) {
+	if root == nil {
+		return
+	}
+	setValues(root.Left, nums)
+	root.Val = (*nums)[0]
+	*nums = (*nums)[1:]
+	setValues(root.Right, nums)
+}
+```
