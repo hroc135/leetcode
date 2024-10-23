@@ -307,3 +307,116 @@ func mergeTrees(root1 *TreeNode, root2 *TreeNode) *TreeNode {
 	return newNode
 }
 ```
+
+### Step 4
+#### 4a
+- 参考: https://github.com/hroc135/leetcode/pull/22/files#r1809110350
+- ダブルポインタをまともに使ったことがなかったが、使いどころとしてはポインタ変数に割り当てるアドレスを変えたいとき？
+- 今回は4bとの比較でダブルポインタを使わないと微妙に手順を変えないといけなくなってコードが冗長になった、
+ということはわかったが、ダブルポインタを使う方法の本質ではない気がする
+
+```Go
+type nodes struct {
+	node1  *TreeNode
+	node2  *TreeNode
+	merged **TreeNode
+}
+
+func mergeTrees(root1 *TreeNode, root2 *TreeNode) *TreeNode {
+	if root1 == nil && root2 == nil {
+		return nil
+	}
+	var mergedRoot *TreeNode
+	var stack []nodes
+	stack = append(stack, nodes{root1, root2, &mergedRoot})
+	for len(stack) > 0 {
+		top := stack[len(stack)-1]
+		node1, node2, merged := top.node1, top.node2, top.merged
+		stack = stack[:len(stack)-1]
+		if node1 == nil && node2 == nil {
+			continue
+		}
+		*merged = &TreeNode{Val: value(node1) + value(node2)}
+		stack = append(stack, nodes{left(node1), left(node2), &(*merged).Left})
+		stack = append(stack, nodes{right(node1), right(node2), &(*merged).Right})
+	}
+	return mergedRoot
+}
+
+func left(node *TreeNode) *TreeNode {
+	if node == nil {
+		return nil
+	}
+	return node.Left
+}
+
+func right(node *TreeNode) *TreeNode {
+	if node == nil {
+		return nil
+	}
+	return node.Right
+}
+
+func value(node *TreeNode) int {
+	if node == nil {
+		return 0
+	}
+	return node.Val
+}
+```
+
+#### 4b
+- 4aとの比較でダブルポインタを使わないとどうなるかということを試してみた
+- 
+
+```Go
+type nodes struct {
+	node1  *TreeNode
+	node2  *TreeNode
+	merged *TreeNode
+}
+
+func mergeTrees(root1 *TreeNode, root2 *TreeNode) *TreeNode {
+	if root1 == nil && root2 == nil {
+		return nil
+	}
+	mergedRoot := &TreeNode{Val: value(root1) + value(root2)}
+	var stack []nodes
+	stack = append(stack, nodes{root1, root2, mergedRoot})
+	for len(stack) > 0 {
+		top := stack[len(stack)-1]
+		node1, node2, merged := top.node1, top.node2, top.merged
+		stack = stack[:len(stack)-1]
+		if left1, left2 := left(node1), left(node2); left1 != nil || left2 != nil {
+			merged.Left = &TreeNode{Val: value(left1) + value(left2)}
+			stack = append(stack, nodes{left1, left2, merged.Left})
+		}
+		if right1, right2 := right(node1), right(node2); right1 != nil || right2 != nil {
+			merged.Right = &TreeNode{Val: value(right1) + value(right2)}
+			stack = append(stack, nodes{right1, right2, merged.Right})
+		}
+	}
+	return mergedRoot
+}
+
+func left(node *TreeNode) *TreeNode {
+	if node == nil {
+		return nil
+	}
+	return node.Left
+}
+
+func right(node *TreeNode) *TreeNode {
+	if node == nil {
+		return nil
+	}
+	return node.Right
+}
+
+func value(node *TreeNode) int {
+	if node == nil {
+		return 0
+	}
+	return node.Val
+}
+```
