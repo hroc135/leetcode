@@ -168,3 +168,120 @@ func zigzagLevelOrderRecursively(node *TreeNode, level int, zigzagLevelOrderValu
 	}
 }
 ```
+
+#### 2d BFS reverse使わない
+- levelの偶奇によって、currentLevelNodeValuesに前から加えるか後ろから加えるかを決める
+
+```Go
+func zigzagLevelOrder(root *TreeNode) [][]int {
+	if root == nil {
+		return [][]int{}
+	}
+	order := [][]int{}
+	level := 0
+	currentLevelNodes := []*TreeNode{root}
+	for len(currentLevelNodes) > 0 {
+		currentLevelNodeValues := []int{}
+		nextLevelNodes := []*TreeNode{}
+		for _, node := range currentLevelNodes {
+			if level%2 == 0 {
+				currentLevelNodeValues = append(currentLevelNodeValues, node.Val)
+			} else {
+				currentLevelNodeValues = append([]int{node.Val}, currentLevelNodeValues...)
+			}
+			if node.Left != nil {
+				nextLevelNodes = append(nextLevelNodes, node.Left)
+			}
+			if node.Right != nil {
+				nextLevelNodes = append(nextLevelNodes, node.Right)
+			}
+		}
+		order = append(order, currentLevelNodeValues)
+		level++
+		currentLevelNodes = nextLevelNodes
+	}
+	return order
+}
+```
+
+#### 2e BFS zigzag探索
+
+```Go
+func zigzagLevelOrder(root *TreeNode) [][]int {
+	if root == nil {
+		return [][]int{}
+	}
+	order := [][]int{}
+	level := 0
+	currentLevelNodes := []*TreeNode{root}
+	for len(currentLevelNodes) > 0 {
+		currentLevelNodeValues := []int{}
+		nextLevelNodes := []*TreeNode{}
+		for i := 0; i < len(currentLevelNodes); i++ {
+			currentLevelNodeValues = append(currentLevelNodeValues, currentLevelNodes[i].Val)
+			if level%2 == 0 {
+				rightToLeft(currentLevelNodes[len(currentLevelNodes)-i-1], &nextLevelNodes)
+			} else {
+				leftToRight(currentLevelNodes[len(currentLevelNodes)-i-1], &nextLevelNodes)
+			}
+		}
+		order = append(order, currentLevelNodeValues)
+		level++
+		currentLevelNodes = nextLevelNodes
+	}
+	return order
+}
+
+func leftToRight(node *TreeNode, nextLevelNodes *[]*TreeNode) {
+	if node.Left != nil {
+		*nextLevelNodes = append(*nextLevelNodes, node.Left)
+	}
+	if node.Right != nil {
+		*nextLevelNodes = append(*nextLevelNodes, node.Right)
+	}
+}
+
+func rightToLeft(node *TreeNode, nextLevelNodes *[]*TreeNode) {
+	if node.Right != nil {
+		*nextLevelNodes = append(*nextLevelNodes, node.Right)
+	}
+	if node.Left != nil {
+		*nextLevelNodes = append(*nextLevelNodes, node.Left)
+	}
+}
+```
+
+### Step 3
+- BFSでlevelが奇数だったらreverseしてorderに入れる方法。
+このやり方が最も自然だろうと思った
+
+```Go
+func zigzagLevelOrder(root *TreeNode) [][]int {
+	if root == nil {
+		return [][]int{}
+	}
+	order := [][]int{}
+	level := 0
+	currentLevelNodes := []*TreeNode{root}
+	for len(currentLevelNodes) > 0 {
+		currentLevelNodeValues := []int{}
+		nextLevelNodes := []*TreeNode{}
+		for _, node := range currentLevelNodes {
+			currentLevelNodeValues = append(currentLevelNodeValues, node.Val)
+			if node.Left != nil {
+				nextLevelNodes = append(nextLevelNodes, node.Left)
+			}
+			if node.Right != nil {
+				nextLevelNodes = append(nextLevelNodes, node.Right)
+			}
+		}
+		if level%2 == 1 {
+			slices.Reverse(currentLevelNodeValues)
+		}
+		order = append(order, currentLevelNodeValues)
+		level++
+		currentLevelNodes = nextLevelNodes
+	}
+	return order
+}
+```
