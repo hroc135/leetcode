@@ -1,3 +1,5 @@
+問題: https://leetcode.com/problems/validate-binary-search-tree/description/
+
 以下のコードは全てGoのデフォルトフォーマッターgofmtにかけてあります。
 
 ```Go
@@ -276,5 +278,79 @@ func isValidBSTRecursive(node *TreeNode, lowerBound, upperBound *int) bool {
 	}
 	return isValidBSTRecursive(node.Left, lowerBound, &node.Val) &&
 		isValidBSTRecursive(node.Right, &node.Val, upperBound)
+}
+```
+
+### Step 4
+#### 4a
+- 再帰inorderを実装
+- 経緯
+	- https://github.com/hroc135/leetcode/pull/27#issuecomment-2462253173
+	- https://github.com/hroc135/leetcode/pull/27#issuecomment-2462311329
+	- https://github.com/hroc135/leetcode/pull/27#issuecomment-2465026481
+	- https://github.com/hroc135/leetcode/pull/27#issuecomment-2465128526
+
+```Go
+type optionalInt struct {
+	hasValue bool
+	value    int
+}
+
+func isValidBST(root *TreeNode) bool {
+	previousValue := &optionalInt{hasValue: false, value: 0}
+	return isValidBSTHelper(root, previousValue)
+}
+
+func isValidBSTHelper(node *TreeNode, previousValue *optionalInt) bool {
+	if node == nil {
+		return true
+	}
+	if !isValidBSTHelper(node.Left, previousValue) {
+		return false
+	}
+	if previousValue.hasValue && node.Val <= previousValue.value {
+		return false
+	}
+	previousValue.hasValue = true
+	previousValue.value = node.Val
+	return isValidBSTHelper(node.Right, previousValue)
+}
+```
+
+#### 4b
+- goroutine
+- マルチスレッドを使える
+- 参考: https://github.com/hroc135/leetcode/pull/27#discussion_r1828839054
+
+```Go
+func isValidBST(root *TreeNode) bool {
+	var previousValue *int
+	c := make(chan *TreeNode)
+	go traverseInorder(root, c)
+	for {
+		node, ok := <-c
+		if !ok {
+			return true
+		}
+		if previousValue != nil && node.Val <= *previousValue {
+			return false
+		}
+		previousValue = &node.Val
+	}
+}
+
+func traverseInorder(node *TreeNode, c chan *TreeNode) {
+	traverseInorderHelper(node, c)
+	close(c)
+}
+
+func traverseInorderHelper(node *TreeNode, c chan *TreeNode) {
+	if node.Left != nil {
+		traverseInorderHelper(node.Left, c)
+	}
+	c <- node
+	if node.Right != nil {
+		traverseInorderHelper(node.Right, c)
+	}
 }
 ```
