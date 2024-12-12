@@ -109,12 +109,91 @@ func buildTree(preorder []int, inorder []int) *TreeNode {
 ```
 
 #### 2b
+- inorderスライスの値とインデックスの組みをmap化する処理を最初に入れることによって、
+時間計算量をO(n)に改善。
+いちいちinorderを走査してインデックスを調べる必要がなくなった
+- 再帰関数に渡す引数をpreorder&inorderの部分sliceではなく、
+preorder&inorderの参照したい区間のstart indexと区間の長さに変えた
+- Pythonのようにリストが関数に値渡しされるような言語だとリストのコピーをなくせるので空間計算量の改善効果もある。
+Goは参照渡しであり、2a, 2bのコードでもpreorderとinorderにappendなどの拡張の操作をしていないので、
+スライスのコピーは作られない
+- n: 要素数
+    - 時間計算量: O(n)
+    - 空間計算量: O(n)
+    - 再帰の深さ: logn ~ n
 
+```Go
+func buildTree(preorder []int, inorder []int) *TreeNode {
+	valueToInorderIndex := make(map[int]int, len(inorder))
+	for i, v := range inorder {
+		valueToInorderIndex[v] = i
+	}
 
-### 用語
+	var buildTreeRecursive func(int, int, int) *TreeNode
+	buildTreeRecursive = func(preorderStartIndex, inorderStartIndex, nodeCount int) *TreeNode {
+		if nodeCount <= 0 {
+			return nil
+		}
+		rootValue := preorder[preorderStartIndex]
+		root := &TreeNode{Val: rootValue}
+		rootInorderIndex, ok := valueToInorderIndex[rootValue]
+		if !ok {
+			return nil // preorderとinorderに誤りがあるときにここに到達するので本当はエラーを返したい
+		}
+		leftNodeCount := rootInorderIndex - inorderStartIndex
+		root.Left = buildTreeRecursive(preorderStartIndex+1, inorderStartIndex, leftNodeCount)
+		root.Right = buildTreeRecursive(preorderStartIndex+leftNodeCount+1, rootInorderIndex+1, nodeCount-leftNodeCount-1)
+		return root
+	}
+
+	return buildTreeRecursive(0, 0, len(preorder))
+}
+```
+
+### Step 3
+
+```Go
+func buildTree(preorder []int, inorder []int) *TreeNode {
+	valueToInorderIndex := make(map[int]int, len(inorder))
+	for i, v := range inorder {
+		valueToInorderIndex[v] = i
+	}
+
+	var buildTreeHelper func(int, int, int) *TreeNode
+	buildTreeHelper = func(preorderStartIndex, inorderStartIndex, nodeCount int) *TreeNode {
+		if nodeCount <= 0 {
+			return nil
+		}
+		rootValue := preorder[preorderStartIndex]
+		root := &TreeNode{Val: rootValue}
+		rootInorderIndex, ok := valueToInorderIndex[rootValue]
+		if !ok {
+			return nil // errorを返したいところ
+		}
+		leftNodeCount := rootInorderIndex - inorderStartIndex
+		root.Left = buildTreeHelper(preorderStartIndex+1, inorderStartIndex, leftNodeCount)
+		root.Right = buildTreeHelper(preorderStartIndex+leftNodeCount+1, rootInorderIndex+1, nodeCount-leftNodeCount-1)
+		return root
+	}
+
+	return buildTreeHelper(0, 0, len(preorder))
+}
+```
+
+### CS
 - auxiliary space
     - 参考: https://www.geeksforgeeks.org/what-is-the-difference-between-auxiliary-space-and-space-complexity/
     - auxiliary: (和)補助
     - auxiliary space: アルゴリズムを実行するために補助的に必要となるメモリサイズ
     - space complexity = input space + auxiliary space
     - ヒープソートの空間計算量はO(n)だが、auxiliary spaceはO(1)
+- thread safe
+    - あるコードを複数のスレッドで実行しても問題が発生しない、
+    つまり、競合が発生せず、単一スレッドで実行した時と同じ結果が得られること
+    - プロセスは、それぞれが独立したメモリ領域を持ち、
+    異なるプロセスのメモリ領域にアクセスすることはできない
+    - 一方、スレッドはプロセス内で実行され、
+    同じプロセス内のスレッドで同じメモリ領域を共有する
+    - 参考: https://zenn.dev/hikapoppin/articles/76d3df2edebcb3
+    - 参考: https://ja.wikipedia.org/wiki/%E3%82%B9%E3%83%AC%E3%83%83%E3%83%89%E3%82%BB%E3%83%BC%E3%83%95
+- parser: 構文解析器、解析器
