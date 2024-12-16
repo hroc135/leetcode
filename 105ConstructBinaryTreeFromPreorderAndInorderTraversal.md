@@ -150,6 +150,111 @@ func buildTree(preorder []int, inorder []int) *TreeNode {
 }
 ```
 
+#### 2c
+- スタックを用いた方法
+- 2bについて、スタックフレーム100Bで見積もると、len(preorder) > 1e7
+でスタックオーバーフローが生じるのでそれくらいデータサイズが大きいのならこちらの方がいい
+- 構造体nodeInfoの命名に迷った
+- n: preorder, inorderの要素数
+	- 時間計算量: O(n)
+	- 空間計算量: O(n)
+- 参考: https://github.com/fhiyo/leetcode/pull/31/files#diff-588e20b8d5d13270d9f58e900c601cc9e72e7aa9c9d083442b5e0334dcbee61aR106
+
+```Go
+func buildTree(preorder []int, inorder []int) *TreeNode {
+	valueToInorderIndex := make(map[int]int, len(inorder))
+	for i, v := range inorder {
+		valueToInorderIndex[v] = i
+	}
+
+	if len(preorder) == 0 {
+		return nil
+	}
+	root := &TreeNode{Val: preorder[0]}
+
+	type nodeInfo struct {
+		node               *TreeNode
+		preorderStartIndex int
+		inorderStartIndex  int
+		nodeCount          int
+	}
+	stack := []nodeInfo{{root, 0, 0, len(preorder)}}
+	for len(stack) > 0 {
+		top := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		topInorderIndex := valueToInorderIndex[top.node.Val]
+		leftChildCount := topInorderIndex - top.inorderStartIndex
+		rightChildCount := top.nodeCount - leftChildCount - 1
+		if leftChildCount > 0 {
+			leftPreorderStartIndex := top.preorderStartIndex + 1
+			top.node.Left = &TreeNode{Val: preorder[leftPreorderStartIndex]}
+			stack = append(stack, nodeInfo{top.node.Left, leftPreorderStartIndex, top.inorderStartIndex, leftChildCount})
+		}
+		if rightChildCount > 0 {
+			rightPreorderStartIndex := top.preorderStartIndex + leftChildCount + 1
+			top.node.Right = &TreeNode{Val: preorder[rightPreorderStartIndex]}
+			stack = append(stack, nodeInfo{top.node.Right, rightPreorderStartIndex, topInorderIndex + 1, rightChildCount})
+		}
+	}
+	return root
+}
+```
+
+#### 2d
+- inorderを手掛かりにpreorder順にノードを繋いでいく方法
+- preorderとinorderのインデックスを管理する変数が両方単調増加するのが特徴
+- 参考: https://github.com/seal-azarashi/leetcode/pull/29/files#diff-73696500ced0485cecebb638161302c2cffe248c6e8330eeee54cb97e8c95328R101
+- 理解するのにかなり時間がかかった
+- 言語化してみたいけどうまくできないので、断片的に色々書いてみる
+	- preorder順にノードを繋いでいく
+	- スタックには、木に繋がれたノードのうち、左の子を持つ可能性のあるものが入っている
+	- `inorderIndex`はinorder[inorderIndex]の値のノードが木に繋がれたことを確認できたらインクリメントされる。
+	- `peek(stack).Val == inorder[inorderIndex]`とは、
+	peek(stack)のノードは左の子を持たないということ
+- 時間計算量: O(n)
+- 空間計算量: O(n)
+	- 最悪の場合は、木が左側一直線になっている時
+
+```Go
+func buildTree(preorder []int, inorder []int) *TreeNode {
+	if len(preorder) == 0 {
+		return nil
+	}
+	root := &TreeNode{Val: preorder[0]}
+	stack := []*TreeNode{root} // 既に繋がれたノードのうち左の子を持つ可能性のあるものが積まれる
+	inorderIndex := 0
+	for i := 1; i < len(preorder); i++ {
+		top := peek(stack)
+		if top.Val != inorder[inorderIndex] {
+			top.Left = &TreeNode{Val: preorder[i]}
+			push(&stack, top.Left)
+			continue
+		}
+		for len(stack) > 0 && peek(stack).Val == inorder[inorderIndex] {
+			top = pop(&stack)
+			inorderIndex++
+		}
+		top.Right = &TreeNode{Val: preorder[i]}
+		push(&stack, top.Right)
+	}
+	return root
+}
+
+func peek[E any](stack []E) E {
+	return stack[len(stack)-1]
+}
+
+func pop[E any](stack *[]E) E {
+	top := (*stack)[len(*stack)-1]
+	*stack = (*stack)[:len(*stack)-1]
+	return top
+}
+
+func push[E any](stack *[]E, elem E) {
+	*stack = append(*stack, elem)
+}
+```
+
 ### Step 3
 
 ```Go
