@@ -5,6 +5,7 @@
 sの接頭辞と合致する単語をwordDictから探す -> sの接頭辞を削り、スタックに入れる ->
 合致する接頭辞を探す -> 接頭辞を削る -> 
 を繰り返す方法
+    - DFSぽい
 - メモが使えそうかなと思ったが一旦使わずに入出力の合致するコードを書くことを優先
 - テストケース
     - s="a", wordDict=["a"] -> true
@@ -125,6 +126,40 @@ func wordBreak(s string, wordDict []string) bool {
 		checkedSuffixesMemo[top] = struct{}{}
 	}
 	return false
+}
+```
+
+#### 2b
+- DPによって入力sが分割された時に単語の先頭文字となるインデックスを記録する方法
+- 例: s = "catsandog", wordDict = ["cats","dog","sand","and","cat"]
+	- canBeSegmented = [1, 0, 0, 1, 1, 0, 0, 1, 0] (0,1はブール値)
+- 時間計算量: O(len(s) * len(wordDict))
+- 空間計算量: O(len(s) + len(wordDict))
+- step1では未チェックの接尾辞をスタックに入れていたが、
+2bはDPでインデックスを管理するので空間計算量を抑えられる
+- `wordDictInitialsToWords`はなくてもいいが２重ループの内側の無駄を削減できる
+- 参考: https://github.com/goto-untrapped/Arai60/pull/20/files#diff-91f169b7b71eab1c0bb41005f23458ed043899b6323955fda29e392baa215b17R1
+
+```Go
+func wordBreak(s string, wordDict []string) bool {
+	wordDictInitialsToWords := make(map[byte][]string)
+	for _, w := range wordDict {
+		wordDictInitialsToWords[w[0]] = append(wordDictInitialsToWords[w[0]], w)
+	}
+
+	canBeSegmented := make([]bool, len(s)+1)
+	for i := 0; i < len(s); i++ {
+		if i != 0 && canBeSegmented[i] == false {
+			continue
+		}
+		for _, w := range wordDictInitialsToWords[s[i]] {
+			if strings.HasPrefix(s[i:], w) {
+				canBeSegmented[i+len(w)] = true
+			}
+		}
+	}
+
+	return canBeSegmented[len(canBeSegmented)-1]
 }
 ```
 
