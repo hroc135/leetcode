@@ -50,6 +50,8 @@ func wordBreak(s string, wordDict []string) bool {
     - "a"で2回削られたsと"aa"で1回削られたsが同じ
     - 同じ接尾辞を繰り返し確認することになってしまう
     のでメモを使えばこの問題を解消できる
+	- メモを使った方が早くなりそうと思いながらコードを書いていたが、
+	メモがないとどのような入力の時に著しく遅くなるかを想定できていなかった
 - メモを付けたら通った
 - 時間計算量: O(len(s) * len(wordDict))
     - sの接尾辞はlen(s)パターンしかないから
@@ -163,6 +165,59 @@ func wordBreak(s string, wordDict []string) bool {
 }
 ```
 
+#### 2c
+- Trieを使う方法
+- Todo: 以下のコードはまだ動かない(ポインタ操作)
+
+```Go
+type TrieNode struct {
+	value    byte
+	children []*TrieNode
+}
+
+func InitTrie(words []string) (root *TrieNode) {
+	root = &TrieNode{byte(0), []*TrieNode{}}
+	for _, w := range words {
+		root.Insert(w)
+	}
+	return root
+}
+
+func (t *TrieNode) Insert(word string) {
+	node := t
+wordLoop:
+	for i := 0; i < len(word); i++ {
+		for _, child := range node.children {
+			if child.value == word[i] {
+				node = child
+				goto wordLoop
+			}
+		}
+		node.children = append(node.children, &TrieNode{word[i], []*TrieNode{}})
+	}
+}
+
+func (t *TrieNode) Search(word string) bool {
+	node := t
+wordLoop:
+	for i := 0; i < len(word); i++ {
+		for _, child := range node.children {
+			if child.value == word[i] {
+				node = child
+				goto wordLoop
+			}
+		}
+		return false
+	}
+	return true
+}
+
+func wordBreak(s string, wordDict []string) bool {
+	trieRoot := InitTrie(wordDict)
+	return trieRoot.Search(s)
+}
+```
+
 ### Step 3
 
 ### CS
@@ -175,3 +230,15 @@ func wordBreak(s string, wordDict []string) bool {
     - 「面接での評価は相乗平均」という話を思い出した。
     「普段Goを使っています」と言いながらこのミスをしたら一発アウトなレベルだろう、、
     - https://go.dev/blog/maps
+- Trie
+	- retrieval(失ったものを取り戻す)から命名された
+	- 根が空ノードの連結リストで表現される
+	- 注意: 空間計算量はtrieに格納され得る値のバリエーションによって決まる
+		- ビットなら子ノードの数は高々2
+		- 小文字アルファベットだけなら子ノードの数は26以下
+		- unicodeの場合、子ノードの数は2Bになってしまうので
+		入力サイズに気をつけないとメモリ使用量が膨大になってしまう
+	- ToDo: TrieNodeのvalueをAlphabetに限定する
+- Goのbyte型
+	- uint8型のaliasである
+	- なのでbyte型のnil値は0
