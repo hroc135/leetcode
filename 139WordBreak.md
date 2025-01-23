@@ -167,7 +167,8 @@ func wordBreak(s string, wordDict []string) bool {
 
 #### 2c
 - Trieを使う方法
-- Todo: 以下のコードはまだ動かない(ポインタ操作)
+- 一旦動かなかったコードを置いておく
+	- 後からよく考えたらtrieを実装しただけで問題の解には全くなっていないのでそりゃダメだ
 
 ```Go
 type TrieNode struct {
@@ -218,7 +219,158 @@ func wordBreak(s string, wordDict []string) bool {
 }
 ```
 
+- 時間がかかりすぎてしまったので以下リンク先を真似て実装
+	- https://github.com/hayashi-ay/leetcode/pull/61/files#diff-25f1226927fe56c505f4cbf2124534215d66f3c2ca0decf160a04dc095c93e83R31
+- TLEになったけど入出力の合致するコードにはなったらしいので
+一旦ここで退散
+- trieはソフトウェアエンジニアの常識に含まれるかどうか微妙なところらしい
+	- https://github.com/hayashi-ay/leetcode/pull/61/files#r1536822342 
+	- https://discord.com/channels/1084280443945353267/1084283898617417748/1297919479074000908
+- とりあえずtrieの概要は抑えたつもり
+
+```Go
+type TrieNode struct {
+	character byte
+	isWordEnd bool
+	children  []*TrieNode
+}
+
+func InitTrie(words []string) (root *TrieNode) {
+	root = &TrieNode{byte(0), false, []*TrieNode{}}
+	for _, w := range words {
+		root.Insert(w)
+	}
+	return root
+}
+
+func (t *TrieNode) Insert(word string) {
+	node := t
+	for i := 0; i < len(word); i++ {
+		index := slices.IndexFunc(node.children, func(child *TrieNode) bool {
+			return child.character == word[i]
+		})
+		if index > -1 {
+			node = node.children[index]
+			continue
+		}
+		child := &TrieNode{character: word[i]}
+		node.children = append(node.children, child)
+		node = child
+	}
+	node.isWordEnd = true
+}
+
+func (t *TrieNode) Search(word string) bool {
+	node := t
+	for i := 0; i < len(word); i++ {
+		index := slices.IndexFunc(node.children, func(child *TrieNode) bool {
+			return child.character == word[i]
+		})
+		if index == -1 {
+			return false
+		}
+		node = node.children[index]
+		continue
+	}
+	return true
+}
+
+func (t *TrieNode) GetAllMatchingPrefixes(word string) []string {
+	prefix := ""
+	prefixes := []string{}
+	node := t
+	for i := 0; i < len(word); i++ {
+		index := slices.IndexFunc(node.children, func(child *TrieNode) bool {
+			return child.character == word[i]
+		})
+		if index == -1 {
+			break
+		}
+		prefix += string(word[i])
+		if node.children[index].isWordEnd {
+			prefixes = append(prefixes, prefix)
+		}
+		node = node.children[index]
+	}
+	return prefixes
+}
+
+func wordBreak(s string, wordDict []string) bool {
+	trieRoot := InitTrie(wordDict)
+
+	var backtrack func(s string) bool
+	backtrack = func(s string) bool {
+		if s == "" {
+			return true
+		}
+		for _, word := range trieRoot.GetAllMatchingPrefixes(s) {
+			if backtrack(s[len(word):]) {
+				return true
+			}
+		}
+		return false
+	}
+
+	return backtrack(s)
+}
+```
+
+#### 2d
+- 再帰
+- memoに追加するタイミングが難しかった
+- 時間計算量: O(len(s) * len(wordDict))
+- 空間計算量: O(len(s))
+- 参考: https://github.com/hayashi-ay/leetcode/pull/61/files#diff-25f1226927fe56c505f4cbf2124534215d66f3c2ca0decf160a04dc095c93e83R127
+
+```Go
+func wordBreak(s string, wordDict []string) bool {
+	memo := make(map[int]bool) // falseのものだけmemoに追加
+
+	var canSplitAtIndex func(index int) bool
+	canSplitAtIndex = func(index int) bool {
+		if index == len(s) {
+			return true
+		}
+		if v, found := memo[index]; found {
+			return v
+		}
+		for _, word := range wordDict {
+			if !strings.HasPrefix(s[index:], word) {
+				continue
+			}
+			if canSplitAtIndex(index + len(word)) {
+				return true
+			}
+			memo[index+len(word)] = false
+		}
+		memo[index] = false
+		return false
+	}
+
+	return canSplitAtIndex(0)
+}
+```
+
 ### Step 3
+- 2bのコードが一番理解しやすかった
+
+```Go
+func wordBreak(s string, wordDict []string) bool {
+	canBeSegmentedHead := make([]bool, len(s)+1)
+	canBeSegmentedHead[0] = true
+	for i := range s {
+		if !canBeSegmentedHead[i] {
+			continue
+		}
+		for _, word := range wordDict {
+			if strings.HasPrefix(s[i:], word) {
+				canBeSegmentedHead[i+len(word)] = true
+			}
+		}
+	}
+	return canBeSegmentedHead[len(s)]
+}
+```
 
 ### CS
 - Goのmap
@@ -238,7 +390,9 @@ func wordBreak(s string, wordDict []string) bool {
 		- 小文字アルファベットだけなら子ノードの数は26以下
 		- unicodeの場合、子ノードの数は2Bになってしまうので
 		入力サイズに気をつけないとメモリ使用量が膨大になってしまう
-	- ToDo: TrieNodeのvalueをAlphabetに限定する
+	- prefix searchでよく使われる
+	- PATRICIA
+	- 参考: https://medium.com/basecs/trying-to-understand-tries-3ec6bede0014
 - Goのbyte型
 	- uint8型のaliasである
 	- なのでbyte型のnil値は0
