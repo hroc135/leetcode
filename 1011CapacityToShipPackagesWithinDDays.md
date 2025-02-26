@@ -193,6 +193,7 @@ func isShippable(weights []int, days int, capacity int) int {
     - Goのスライスは参照渡しなのでメモリ使用量が増える心配はしなくてよい
     - inner functionではなく、外で定義した方が個人的には見やすい
     - 機能面的にはinner functionにした方がメリットが多そう
+- weightsが空の時、slices.Maxでpanicする
 
 ```Go
 func SumInts(s []int) int {
@@ -231,5 +232,62 @@ func shipWithinDays(weights []int, days int) int {
 		}
 	}
 	return low
+}
+```
+
+### Step 4
+- slices.BinarySearchFuncの内部実装を見る
+- ⚠️質問
+    - https://cs.opensource.google/go/go/+/master:src/slices/sort.go;l=158
+    - middleを計算する際にoverflow対策のため、
+    `middle := int(uint(low+high) >> 1)`としている
+    - これがoverflow対策になっているのは、int型よりuint型の方が大きい正の数を表現できるから？？
+    - すなわち、32bitマシンにおいてint型はint32と同じ大きさで、
+    同様にuint型はuint32と同じになり、
+    表現できる最大値がそれぞれ2^31-1と2^32-1で後者の方が大きいからuint(low+high)でoverflowしない
+    - 計算結果は`(low+high) / 2`と同じ(overflowしなければ)？？
+- 以前から気になっていたが、Goの標準ライブラリの内部実装を見ると、
+一文字変数や省略形が多用されている印象を受ける
+    - 今回も、i -> low, j -> high, h -> middle としたいところ
+
+```Go
+func BinarySearchFunc[S ~[]E, E, T any](x S, target T, cmp func(E, T) int) (int, bool) {
+	n := len(x)
+	i, j := 0, n
+	for i < j {
+		h := int(uint(i+j) >> 1)
+		if cmp(x[h], target) < 0 {
+			i = h + 1
+		} else {
+			j = h
+		}
+	}
+	return i, i < n && cmp(x[i], target) == 0
+}
+```
+
+- slices.BinarySearchもやってみる
+- isNaN関数の実装がいまいちよくわからなかった
+    - math.IsNaNの説明に書いてあった
+    - https://cs.opensource.google/go/go/+/refs/tags/go1.24.0:src/math/bits.go;l=35
+    - IEEE754でNaNだけx!=xになると定義されているのか
+
+```Go
+func BinarySearch[S ~[]E, E cmp.Ordered](x S, target E) (int, bool) {
+	n := len(x)
+	i, j := 0, n
+	for i < j {
+		h := int(uint(i+j) >> 1)
+		if cmp.Less(x[h], target) {
+			i = h + 1
+		} else {
+			j = h
+		}
+	}
+	return i, i < n && (x[i] == target || (isNaN(x[i]) && isNaN(target)))
+}
+
+func isNaN[T cmp.Ordered](x T) bool {
+	return x != x
 }
 ```
